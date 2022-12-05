@@ -28,32 +28,61 @@ parseState stateStr =
     itemLs = take (length ls - 1) ls
     ls = lines stateStr
 
-parseInput :: [Char] -> ([[Char]], [String])
+parseInput :: [Char] -> ([[Char]], [(Int,Int,Int)])
 parseInput contents =
   (state, instructions)
   where
     state = parseState stateStr
-    instructions = lines instrStr
+    instructions = map (parseInstruction.words) $ lines instrStr
+    parseInstruction tokens = (read (tokens !! 1) :: Int,
+                             (read (tokens !! 3) :: Int) - 1,
+                             (read (tokens !! 5) :: Int) - 1)
     [stateStr, instrStr] = splitOn "\n\n" contents
 
-applyInstruction :: [String] -> String -> [String]
-applyInstruction state instruction =
-  state
+move :: [String] -> Int -> Int -> [String]
+move oldstate isrc idst =
+  pre2 ++ (newDst :post2)
   where
-    nMove = read (tokens !! 1) :: Int
-    iSrc = (read (tokens !! 3) :: Int) - 1
-    iDst = (read (tokens !! 5) :: Int) - 1
-    tokens = words instruction
+    newDst = dst++[last src]
+    (pre2, dst:post2) = splitAt idst withoutMoved
+    withoutMoved = pre1 ++ (init src :post1)
+    (pre1, src:post1) = splitAt isrc oldstate
 
+applyPart1Instruction :: [String] -> (Int,Int,Int) -> [String]
+applyPart1Instruction state instruction =
+  foldl instr state [1..nMove] 
+  where
+    instr oldstate _ = move oldstate iSrc iDst
+    (nMove,iSrc, iDst) = instruction
+
+moveStack :: [String] -> Int -> Int -> Int -> [String]
+moveStack oldstate isrc idst n =
+  pre2 ++ (dst++ toMove):post2
+  where
+    (pre2, dst:post2) = splitAt idst withoutMoved
+    withoutMoved = pre1 ++ newSrc:post1
+    (newSrc,toMove) = splitAt (length src - n) src
+    (pre1, src:post1) = splitAt isrc oldstate
+
+applyPart2Instruction :: [String] -> (Int,Int,Int) -> [String]
+applyPart2Instruction state instruction =
+  moveStack state iSrc iDst nMove
+  where
+    (nMove,iSrc, iDst) = instruction
+    
 part1 :: String -> String
 part1 contents =
   map last finalState
   where
-    finalState = foldl applyInstruction initialState instructions
+    finalState = foldl applyPart1Instruction initialState instructions
     (initialState, instructions) = parseInput contents
 
 part2 :: String -> String
-part2 contents = "banan"
+part2 contents = 
+  map last finalState
+  where
+    finalState = foldl applyPart2Instruction initialState instructions
+    (initialState, instructions) = parseInput contents
 
 main :: IO ()
 main = do
