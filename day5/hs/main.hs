@@ -1,43 +1,56 @@
-import System.Environment
-import System.Exit
+import Control.Monad (when)
+import Data.List (transpose)
+import Data.List.Split (splitOn)
+import System.Environment (getArgs)
+import System.Exit (die)
 import System.IO
-import Data.List.Split
+
+-- generic
 
 getArgContents :: IO String
 getArgContents = do
   args <- getArgs
-  if (length args) < 1
-    then die "Insufficient arguments"
-    else return ()
-  let filename = args !! 0
+  when (null args) $ die "Insufficient arguments"
+  let filename = head args
   handle <- openFile filename ReadMode
-  contents <- hGetContents handle
-  return contents
+  hGetContents handle
 
-parseInstructions instrStr = lines instrStr
+-- problem specific stuff
 
-transpose :: [[a]] -> [[a]]
-transpose ([]:_) = []
-transpose x = (map head x) : transpose (map tail x)
-
+parseState :: String -> [String]
 parseState stateStr =
-  transpose $ reverse $ map mySplit itemLs
+  map (takeWhile (/= ' ')) $ transpose $ map (take nCols . (++ repeat ' ')) rawRows
   where
-    mySplit (x:y:xs) = y : mySplit (drop 2 xs)
-    mySplit _ =  []
-    itemLs = take ((length ls)-1) ls
+    nCols = length $ head rawRows
+    rawRows = reverse $ map mySplit itemLs
+    mySplit (x : y : xs) = y : mySplit (drop 2 xs)
+    mySplit _ = []
+    itemLs = take (length ls - 1) ls
     ls = lines stateStr
 
+parseInput :: [Char] -> ([[Char]], [String])
 parseInput contents =
-  (state,instructions)
+  (state, instructions)
   where
     state = parseState stateStr
-    instructions = parseInstructions instrStr
-    [stateStr,instrStr] = splitOn "\n\n" contents
+    instructions = lines instrStr
+    [stateStr, instrStr] = splitOn "\n\n" contents
 
+applyInstruction :: [String] -> String -> [String]
+applyInstruction state instruction =
+  state
+  where
+    nMove = read (tokens !! 1) :: Int
+    iSrc = (read (tokens !! 3) :: Int) - 1
+    iDst = (read (tokens !! 5) :: Int) - 1
+    tokens = words instruction
 
--- part1 :: String -> String
-part1 contents = parseInput contents
+part1 :: String -> String
+part1 contents =
+  map last finalState
+  where
+    finalState = foldl applyInstruction initialState instructions
+    (initialState, instructions) = parseInput contents
 
 part2 :: String -> String
 part2 contents = "banan"
