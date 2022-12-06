@@ -1,6 +1,8 @@
-import System.Environment
-import System.Exit
+import System.Environment (getArgs)
+import System.Exit (die)
 import System.IO
+
+-- generic
 
 getArgContents :: IO String
 getArgContents = do
@@ -12,6 +14,8 @@ getArgContents = do
   handle <- openFile filename ReadMode
   contents <- hGetContents handle
   return contents
+
+-- problem specific stuff
 
 part1 :: String -> Int
 part1 contents = length contents
