@@ -40,7 +40,7 @@ toAbsoluteDirListings commands =
              ".." -> (init path, listings)
              _ -> (path++[cdarg], listings)
 
-data FileNode = File String Int | Dir String [FileNode] 
+data FileNode = File String Int | Dir String [FileNode]
 
 fileSize :: FileNode -> Int
 fileSize (File _ sz) = sz
@@ -59,11 +59,11 @@ showDir level node =
   replicate level ' ' ++ case node of
                            File name size -> name ++ " " ++ show size ++ "\n"
                            Dir name contents -> name ++ "\n"++ concatMap (showDir (level+2)) contents
-  
+
 newtype Tree = Tree FileNode
 instance Show Tree where
   show (Tree rootnode) = showDir 0 rootnode
- 
+
 buildTree :: [(String, [String])] -> Tree
 buildTree commands =
   Tree (Dir "/"  $ foldl addListing [] listings)
@@ -74,23 +74,23 @@ buildTree commands =
                                   else insertItems (head path) (tail path) items dir
     convertItem item = if q == "dir" then Dir name [] else File name $ read q
       where [q, name] = words item
-    insertItems dirname path items dir = map banan dir
+    insertItems dirname path items = map banan
       where banan n | (Dir name cont) <- n, name == dirname = Dir dirname $ addListing cont (path, items)
                     | otherwise = n
-  
+
 getTreeDirSizes :: Tree -> [(String, Int)]
 getTreeDirSizes (Tree rootnode) =
   getDirSizes "" rootnode
 
-  
+
 part1 :: String -> Int
 part1 contents =
   let dirSizes = getTreeDirSizes $ buildTree $ getCommands contents
   in
     sum $ [ sz | (name,sz) <- dirSizes, sz<= 100000]
 
--- part2 :: String -> Int
-part2 contents = 
+part2 :: String -> Int
+part2 contents =
   let dirSizes = getTreeDirSizes $ buildTree $ getCommands contents
       sorted = map snd $ sortBy (compare `on` snd) dirSizes
       total = last sorted
