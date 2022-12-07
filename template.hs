@@ -1,19 +1,17 @@
 import System.Environment (getArgs)
 import System.Exit (die)
 import System.IO
+import Control.Monad
 
 -- generic
 
 getArgContents :: IO String
 getArgContents = do
   args <- getArgs
-  if (length args) < 1
-    then die "Insufficient arguments"
-    else return ()
-  let filename = args !! 0
+  Control.Monad.when (null args) $ die "Insufficient arguments"
+  let filename = head args
   handle <- openFile filename ReadMode
-  contents <- hGetContents handle
-  return contents
+  hGetContents handle
 
 -- problem specific stuff
 
