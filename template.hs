@@ -25,6 +25,6 @@ main :: IO ()
 main = do
   contents <- getArgContents
   let part1answer = part1 contents
-  putStrLn $ "Part1 answer: " ++ show part1answer
+  putStrLn $ "Part1 answer:\n" ++ show part1answer
   let part2answer = part2 contents
-  putStrLn $ "Part2 answer: " ++ show part2answer
+  putStrLn $ "Part2 answer:\n" ++ show part2answer
