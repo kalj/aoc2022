@@ -3,10 +3,10 @@ import System.Exit (die)
 import System.IO
 import Control.Monad
 import Data.Char (ord, chr)
-import Data.List (findIndex, elemIndex)
+import Data.List (elemIndex, delete)
 import Data.Maybe
-import qualified Data.Set as S
 import Debug.Trace
+import GHC.Num (integerFromWordList)
 
 -- generic
 
@@ -20,7 +20,9 @@ getArgContents = do
 
 -- problem specific stuff
 
-data Map = Map [[Int]] (Int,Int) (Int,Int)
+type Coord = (Int,Int)
+
+data Map = Map [[Int]] Coord Coord
 
 instance Show Map where
   show (Map heights sPos ePos) =
@@ -35,7 +37,7 @@ instance Show Map where
         | otherwise = ch
 
 
-findChar :: Char -> [[Char]] -> (Int,Int)
+findChar :: Char -> [[Char]] -> Coord
 findChar key =
   head . mapMaybe foo . zipWith (\i row -> (i, elemIndex key row)) [0..]
   where
@@ -66,68 +68,92 @@ setAt m (ci,cj) v =
     (preCols,_:postCols) = splitAt cj myRow
     (preRows,myRow:postRows) = splitAt ci m
 
-getNeighbors n@(i,j) (Map hs _ _) =
-  filter inside [(i-1,j),(i+1,j),(i,j-1),(i,j+1)]
-  where
-    inside (ci,cj) = ci>=0 && cj>=0 && ci < length hs && cj < length (head hs)
-
-accessibleFrom hs src dst =
+accessibleFrom (Map hs _ _) src dst =
   dstH <= srcH+1
   where
     srcH = hs!!!src
     dstH = hs!!!dst
 
-getDoneNeighborsWithAccess n ds m@(Map hs _ _) =
-  filter fltr $ getNeighbors n m
+getAccessibleNeighbors accF (Map hs _ _) n@(i,j) =
+  filter fltr [(i-1,j),(i+1,j),(i,j-1),(i,j+1)]
   where
-    fltr c = done c && accessibleFrom hs c n
-    done c = ds!!!c /= -1
+    fltr c = inside c && accF n c
+    inside (ci,cj) = ci>=0 && cj>=0 && ci < length hs && cj < length (head hs)
 
-getNextNodes n ds m@(Map hs _ _) =
-  filter fltr $ getNeighbors n m
+-- unvisitedNeighbors :: (Int, Int) -> [(Int, Int)] -> Map -> [(Int, Int)]
+unvisitedNeighbors accF n unvisited m =
+  filter (`elem` unvisited) $ getAccessibleNeighbors accF m n
+
+-- showGrid :: Show a => [[a]] -> String
+-- showGrid = unlines . map show
+
+-- traceGrid g = trace (showGrid g) g
+
+dijkstra :: (Coord->Coord->Bool) -> Coord -> Coord -> [[Int]] -> [Coord] -> Map -> [[Int]]
+dijkstra accF tgt curr ds unvis m =
+  if tgt == nextCurr then
+    nextDs
+  else
+    dijkstra accF tgt nextCurr nextDs nextUnvis m
   where
-    fltr c = not (done c) && accessibleFrom hs n c
-    done c = ds!!!c /= -1
+    nbrs = unvisitedNeighbors accF curr unvis m
+    currD = ds!!!curr
+    nextDs = foldl updateDistance ds nbrs
+    updateDistance dsi nbr = setAt dsi nbr newDist
+      where newDist = min (dsi!!!nbr) (currD+1)
 
-computeNodeDistance ds n m =
-  setAt ds n myDist
+    nextCurr = foldl1 (\u1 u2 -> if (nextDs!!!u1) < (nextDs!!!u2) then u1 else u2) unvis
+    nextUnvis = delete nextCurr unvis
+
+replicate2 n m v = replicate n (replicate m v)
+
+distMap m@(Map hs sp ep) =
+  distances
   where
-    myDist = minimum candDs + 1
-    cands = getDoneNeighborsWithAccess n ds m
-    candDs = map (ds!!!) cands
+    distances = dijkstra (accessibleFrom m) ep curr0 dist0 unvis0 m
+    curr0 = sp
+    dist0 = setAt (replicate2 rows cols (rows*cols)) sp 0
+    unvis0 = [(i,j) | i<-[0..rows-1], j<-[0..cols-1], (i,j)/=sp]
+    rows = length hs
+    cols = length $ head hs
 
-showGrid :: Show a => [[a]] -> String
-showGrid = unlines . map show
-
-traceGrid g = trace (showGrid g) g
-
-computeDistances :: [[Int]] -> S.Set (Int,Int) ->  Map -> [[Int]]
-computeDistances ds nset m
-  | S.null nset = ds
-  | otherwise = computeDistances  ds2 ns2 m
+part1 :: [[Int]] -> Map -> Int
+part1 ds m =
+  ds !!! sp
   where
-    ds2 =  computeNodeDistance ds (trace (show n ++ "  " ++ show (length nset)) n) m
-    (n:ns) = S.toList nset
-    ns2 = S.union (S.fromList ns) (S.fromList (getNextNodes n ds2 m))
+    (Map _ sp ep) = m
 
--- part1 :: String -> Int
--- part1 :: String -> [[Int]]
-part1 contents =
-  distances !!! ep
+
+getHeightPoints hs h =
+  [(i,j) | i<-[0..rows-1], j<-[0..cols-1], hs!!!(i,j) == h]
   where
-    distances = computeDistances startDs startNodes mapp
-    mapp@(Map hs sp ep) = parseMap contents
-    startDs = setAt allMinusOnes sp 0
-    startNodes = S.fromList $ getNextNodes sp startDs mapp
-    allMinusOnes = replicate (length hs) (replicate (length (head hs)) (-1))
+    rows = length hs
+    cols = length $ head hs
 
-part2 :: String -> Int
-part2 contents = length contents
+revDistMap :: Map -> [[Int]]
+revDistMap m@(Map hs sp ep) =
+  dijkstra accfun sp curr0 dist0 unvis0 m
+  where
+    accfun s d = accessibleFrom m d s
+    curr0 = ep
+    dist0 = setAt (replicate2 rows cols (rows*cols)) ep 0
+    unvis0 = [(i,j) | i<-[0..rows-1], j<-[0..cols-1], (i,j)/=ep]
+    rows = length hs
+    cols = length $ head hs
+
+part2 :: [[Int]] -> Map -> Int
+part2 dists m =
+  minimum $ map (dists!!!) aPts
+  where
+    aPts = getHeightPoints hs 0
+    (Map hs _ ep) = m
 
 main :: IO ()
 main = do
   contents <- getArgContents
-  let part1answer = part1 contents
+  let m = parseMap contents
+      distances = revDistMap m
+  let part1answer = part1 distances m
   putStrLn $ "Part1 answer:\n" ++ show part1answer
-  let part2answer = part2 contents
+  let part2answer = part2 distances m
   putStrLn $ "Part2 answer:\n" ++ show part2answer
