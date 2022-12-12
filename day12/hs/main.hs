@@ -20,7 +20,7 @@ getArgContents = do
 
 -- problem specific stuff
 
-data Map = Map [[Int]] (Int,Int) (Int,Int)  
+data Map = Map [[Int]] (Int,Int) (Int,Int)
 
 instance Show Map where
   show (Map heights sPos ePos) =
@@ -29,11 +29,11 @@ instance Show Map where
       m = zipWith (\row i -> zipWith (\ch j-> trchr (i,j) ch) row [0..]) hm [0..]
       hm = map (map h2a) heights
       h2a h = chr $ ord 'a' + h
-      trchr p ch 
+      trchr p ch
         | p==sPos   = 'S'
         | p==ePos   = 'E'
         | otherwise = ch
-      
+
 
 findChar :: Char -> [[Char]] -> (Int,Int)
 findChar key =
@@ -51,7 +51,7 @@ parseMap contents =
     a2h ch = ord (trchr ch) - ord 'a'
       where
         trchr ch
-          | ch=='E'   = 'z' 
+          | ch=='E'   = 'z'
           | ch=='S'   = 'a'
           | otherwise = ch
     startPos = findChar 'S' charmap
@@ -59,7 +59,7 @@ parseMap contents =
 
 (!!!) m (ci,cj) = m !! ci !! cj
 
-setAt m (ci,cj) v = 
+setAt m (ci,cj) v =
   preRows++(newRow:postRows)
   where
     newRow = preCols++(v:postCols)
@@ -78,13 +78,13 @@ accessibleFrom hs src dst =
     dstH = hs!!!dst
 
 getDoneNeighborsWithAccess n ds m@(Map hs _ _) =
-  filter fltr $ getNeighbors n m 
+  filter fltr $ getNeighbors n m
   where
     fltr c = done c && accessibleFrom hs c n
     done c = ds!!!c /= -1
 
 getNextNodes n ds m@(Map hs _ _) =
-  filter fltr $ getNeighbors n m 
+  filter fltr $ getNeighbors n m
   where
     fltr c = not (done c) && accessibleFrom hs n c
     done c = ds!!!c /= -1
@@ -99,26 +99,26 @@ computeNodeDistance ds n m =
 showGrid :: Show a => [[a]] -> String
 showGrid = unlines . map show
 
-traceGrid g = trace (showGrid g) g 
+traceGrid g = trace (showGrid g) g
 
 computeDistances :: [[Int]] -> S.Set (Int,Int) ->  Map -> [[Int]]
-computeDistances ds ns m
+computeDistances ds nset m
   | S.null nset = ds
   | otherwise = computeDistances  ds2 ns2 m
   where
     ds2 =  computeNodeDistance ds (trace (show n ++ "  " ++ show (length nset)) n) m
     (n:ns) = S.toList nset
-    ns2 = 
-    
+    ns2 = S.union (S.fromList ns) (S.fromList (getNextNodes n ds2 m))
+
 -- part1 :: String -> Int
 -- part1 :: String -> [[Int]]
-part1 contents = 
+part1 contents =
   distances !!! ep
   where
-    distances = computeDistances startDs startNodes mapp 
+    distances = computeDistances startDs startNodes mapp
     mapp@(Map hs sp ep) = parseMap contents
     startDs = setAt allMinusOnes sp 0
-    startNodes = getNextNodes sp startDs mapp
+    startNodes = S.fromList $ getNextNodes sp startDs mapp
     allMinusOnes = replicate (length hs) (replicate (length (head hs)) (-1))
 
 part2 :: String -> Int
