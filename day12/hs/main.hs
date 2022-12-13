@@ -66,19 +66,23 @@ setAt m (ci,cj) v =
     (preCols,_:postCols) = splitAt cj myRow
     (preRows,myRow:postRows) = splitAt ci m
 
+type AccF = (Coord -> Coord -> Bool)
+  
+accessibleFrom :: Map -> AccF
 accessibleFrom (Map hs _ _) src dst =
   dstH <= srcH+1
   where
     srcH = hs!!!src
     dstH = hs!!!dst
 
+getAccessibleNeighbors :: AccF -> Map -> Coord -> [Coord]
 getAccessibleNeighbors accF (Map hs _ _) n@(i,j) =
   filter fltr [(i-1,j),(i+1,j),(i,j-1),(i,j+1)]
   where
     fltr c = inside c && accF n c
     inside (ci,cj) = ci>=0 && cj>=0 && ci < length hs && cj < length (head hs)
 
--- unvisitedNeighbors :: (Int, Int) -> [(Int, Int)] -> Map -> [(Int, Int)]
+unvisitedNeighbors :: AccF -> Coord -> [Coord] -> Map -> [Coord]
 unvisitedNeighbors accF n unvisited m =
   filter (`elem` unvisited) $ getAccessibleNeighbors accF m n
 
@@ -87,7 +91,7 @@ unvisitedNeighbors accF n unvisited m =
 
 -- traceGrid g = trace (showGrid g) g
 
-dijkstra :: (Coord->Coord->Bool) -> Coord -> Coord -> [[Int]] -> [Coord] -> Map -> [[Int]]
+dijkstra :: AccF -> Coord -> Coord -> [[Int]] -> [Coord] -> Map -> [[Int]]
 dijkstra accF tgt curr ds unvis m =
   if tgt == nextCurr then
     nextDs
