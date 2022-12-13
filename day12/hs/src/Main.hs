@@ -3,9 +3,9 @@ import System.Exit (die)
 import System.IO
 import Control.Monad
 import Data.Char (ord, chr)
-import Data.List (elemIndex, delete)
+import Data.List (elemIndex)
 import qualified Data.Heap as H
--- import qualified Data.Set as S  
+-- import qualified Data.Set as S
 import qualified Data.HashSet as S
 import Data.Maybe
 
@@ -55,10 +55,10 @@ parseMap contents =
     heights = map (map a2h) charmap
     a2h ch = ord (trchr ch) - ord 'a'
       where
-        trchr ch
-          | ch=='E'   = 'z'
-          | ch=='S'   = 'a'
-          | otherwise = ch
+        trchr c
+          | c=='E'   = 'z'
+          | c=='S'   = 'a'
+          | otherwise = c
     startPos = findChar 'S' charmap
     endPos = findChar 'E' charmap
 
@@ -72,7 +72,7 @@ setAt m (ci,cj) v =
     (preRows,myRow:postRows) = splitAt ci m
 
 type AccF = (Coord -> Coord -> Bool)
-  
+
 accessibleFrom :: Map -> AccF
 accessibleFrom (Map hs _ _) src dst =
   dstH <= srcH+1
@@ -88,16 +88,14 @@ getAccessibleNeighbors accF (Map hs _ _) n@(i,j) =
     inside (ci,cj) = ci>=0 && cj>=0 && ci < length hs && cj < length (head hs)
 
 unvisitedNeighbors :: AccF -> Coord -> UnvisSet -> Map -> [Coord]
-unvisitedNeighbors accF n unvisited m =
-  filter (`S.member` unvisited) $ getAccessibleNeighbors accF m n
+unvisitedNeighbors accF n uv m =
+  filter (`S.member` uv) $ getAccessibleNeighbors accF m n
 
 -- showGrid :: Show a => [[a]] -> String
 -- showGrid = unlines . map show
-
-  
-
 -- traceGrid g = trace (showGrid g) g
-data DjkState = DjkState {accF :: AccF
+
+data DjkState = DjkState {accF      :: AccF
                          ,targetPos :: Coord
                          ,currPos   :: Coord
                          ,distances :: [[Int]]
@@ -122,13 +120,14 @@ dijkstra s@(DjkState _ tgt curr ds unvis m q) =
     Just ((nD,nextCurr), nextq) = H.view nextq
     nextUnvis = S.delete nextCurr unvis
 
+replicate2 :: Int -> Int -> a -> [[a]]
 replicate2 n m v = replicate n (replicate m v)
 
 part1 :: [[Int]] -> Map -> Int
 part1 ds m =
   ds !!! sp
   where
-    (Map _ sp ep) = m
+    (Map _ sp _) = m
 
 
 getHeightPoints hs h =
@@ -155,14 +154,14 @@ part2 dists m =
   minimum $ map (dists!!!) aPts
   where
     aPts = getHeightPoints hs 0
-    (Map hs _ ep) = m
+    (Map hs _ _) = m
 
 main :: IO ()
 main = do
   contents <- getArgContents
   let m = parseMap contents
-      distances = revDistMap m
-  let part1answer = part1 distances m
+      dists = revDistMap m
+  let part1answer = part1 dists m
   putStrLn $ "Part1 answer:\n" ++ show part1answer
-  let part2answer = part2 distances m
+  let part2answer = part2 dists m
   putStrLn $ "Part2 answer:\n" ++ show part2answer
