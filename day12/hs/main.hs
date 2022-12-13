@@ -5,8 +5,6 @@ import Control.Monad
 import Data.Char (ord, chr)
 import Data.List (elemIndex, delete)
 import Data.Maybe
-import Debug.Trace
-import GHC.Num (integerFromWordList)
 
 -- generic
 
