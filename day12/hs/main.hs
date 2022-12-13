@@ -75,6 +75,8 @@ accessibleFrom (Map hs _ _) src dst =
     srcH = hs!!!src
     dstH = hs!!!dst
 
+type AccF = (Coord -> Coord -> Bool)
+
 getAccessibleNeighbors :: AccF -> Map -> Coord -> [Coord]
 getAccessibleNeighbors accF (Map hs _ _) n@(i,j) =
   filter fltr [(i-1,j),(i+1,j),(i,j-1),(i,j+1)]
@@ -82,16 +84,16 @@ getAccessibleNeighbors accF (Map hs _ _) n@(i,j) =
     fltr c = inside c && accF n c
     inside (ci,cj) = ci>=0 && cj>=0 && ci < length hs && cj < length (head hs)
 
-unvisitedNeighbors :: AccF -> Coord -> [Coord] -> Map -> [Coord]
+unvisitedNeighbors :: AccF -> Coord -> [[Bool]] -> Map -> [Coord]
 unvisitedNeighbors accF n unvisited m =
-  filter (`elem` unvisited) $ getAccessibleNeighbors accF m n
+  filter (unvisited!!!) $ getAccessibleNeighbors accF m n
 
 -- showGrid :: Show a => [[a]] -> String
 -- showGrid = unlines . map show
 
 -- traceGrid g = trace (showGrid g) g
 
-dijkstra :: AccF -> Coord -> Coord -> [[Int]] -> [Coord] -> Map -> [[Int]]
+dijkstra :: AccF -> Coord -> Coord -> [[Int]] -> [[Bool]] -> Map -> [[Int]]
 dijkstra accF tgt curr ds unvis m =
   if tgt == nextCurr then
     nextDs
@@ -104,8 +106,9 @@ dijkstra accF tgt curr ds unvis m =
     updateDistance dsi nbr = setAt dsi nbr newDist
       where newDist = min (dsi!!!nbr) (currD+1)
 
-    nextCurr = foldl1 (\u1 u2 -> if (nextDs!!!u1) < (nextDs!!!u2) then u1 else u2) unvis
-    nextUnvis = delete nextCurr unvis
+    unvisPts = [(i,j) | i<-[0..(length unvis - 1)], j<-[0..(length (head unvis) -1)], unvis!!!(i,j)]
+    nextCurr = foldl1 (\u1 u2 -> if (nextDs!!!u1) < (nextDs!!!u2) then u1 else u2) unvisPts
+    nextUnvis = setAt unvis nextCurr False
 
 replicate2 n m v = replicate n (replicate m v)
 
@@ -115,7 +118,7 @@ distMap m@(Map hs sp ep) =
     distances = dijkstra (accessibleFrom m) ep curr0 dist0 unvis0 m
     curr0 = sp
     dist0 = setAt (replicate2 rows cols (rows*cols)) sp 0
-    unvis0 = [(i,j) | i<-[0..rows-1], j<-[0..cols-1], (i,j)/=sp]
+    unvis0 = [ [ (i,j)/=sp | j<-[0..cols-1]] |  i<-[0..rows-1]] 
     rows = length hs
     cols = length $ head hs
 
@@ -139,7 +142,7 @@ revDistMap m@(Map hs sp ep) =
     accfun s d = accessibleFrom m d s
     curr0 = ep
     dist0 = setAt (replicate2 rows cols (rows*cols)) ep 0
-    unvis0 = [(i,j) | i<-[0..rows-1], j<-[0..cols-1], (i,j)/=ep]
+    unvis0 = [ [ (i,j)/=ep | j<-[0..cols-1]] |  i<-[0..rows-1]] 
     rows = length hs
     cols = length $ head hs
 
