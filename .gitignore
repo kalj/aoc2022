@@ -4,3 +4,4 @@
 **/Cargo.lock
 **/.stack-work
 **/*.cabal
+**/stack.yaml.lock
