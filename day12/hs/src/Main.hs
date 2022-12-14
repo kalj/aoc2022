@@ -45,7 +45,7 @@ findChar key =
   head . mapMaybe foo . zipWith (\i row -> (i, elemIndex key row)) [0..]
   where
     foo (i,Just j) = Just (i,j)
-    foo (i,Nothing) = Nothing
+    foo (_,Nothing) = Nothing
 
 parseMap :: String -> Map
 parseMap contents =
@@ -87,9 +87,10 @@ getAccessibleNeighbors accF (Map hs _ _) n@(i,j) =
     fltr c = inside c && accF n c
     inside (ci,cj) = ci>=0 && cj>=0 && ci < length hs && cj < length (head hs)
 
-unvisitedNeighbors :: AccF -> Coord -> UnvisSet -> Map -> [Coord]
-unvisitedNeighbors accF n uv m =
-  filter (`S.member` uv) $ getAccessibleNeighbors accF m n
+-- unvisitedNeighbors :: AccF -> Coord -> UnvisSet -> Map -> [Coord]
+unvisitedNeighbors :: Coord -> DjkState -> [Coord]
+unvisitedNeighbors c (DjkState af _ _ uv m _) =
+  filter (`S.member` uv) $ getAccessibleNeighbors af m c
 
 -- showGrid :: Show a => [[a]] -> String
 -- showGrid = unlines . map show
@@ -97,28 +98,39 @@ unvisitedNeighbors accF n uv m =
 
 data DjkState = DjkState {accF      :: AccF
                          ,targetPos :: Coord
-                         ,currPos   :: Coord
                          ,distances :: [[Int]]
                          ,unvisited :: UnvisSet
                          ,mapp      :: Map
                          ,queue     :: H.MinPrioHeap Int Coord
                          }
 
-dijkstra :: DjkState -> [[Int]]
-dijkstra s@(DjkState _ tgt curr ds unvis m q) =
-  if tgt == nextCurr then
-    nextDs
-  else
-    dijkstra s {currPos = nextCurr, distances = nextDs, unvisited = nextUnvis, queue = nextq}
-  where
-    nbrs = unvisitedNeighbors (accF s) curr unvis m
-    currD = ds!!!curr
-    nextDs = foldl updateDistance ds nbrs
-    updateDistance dsi nbr = setAt dsi nbr newDist
-      where newDist = min (dsi!!!nbr) (currD+1)
+getNext :: DjkState -> Maybe (Coord, DjkState)
+getNext s =
+  case H.view (queue s) of
+    Nothing -> Nothing
+    Just ((_,c), nextq) ->
+      if c == targetPos s then
+        Nothing
+      else if visited c then
+        getNext s { queue = nextq }
+      else
+        Just (c, s {unvisited = S.delete c (unvisited s), queue = nextq })
+  where visited = not . (`S.member` unvisited s)
+  
+getDist s c = distances s !!! c
 
-    Just ((nD,nextCurr), nextq) = H.view nextq
-    nextUnvis = S.delete nextCurr unvis
+dijkstra :: Coord -> DjkState -> [[Int]]
+dijkstra curr s =
+  case getNext updatedS of
+    Just (nextCurr, nexts) -> dijkstra nextCurr nexts
+    Nothing -> distances updatedS
+  where
+    newDist = getDist s curr + 1
+    updatedS = foldl updateDistance s (unvisitedNeighbors curr s)
+    updateDistance ss nbr = if newDist < getDist  ss nbr
+                                    then ss { distances = setAt (distances ss) nbr newDist, queue = newq }
+                                    else ss
+        where newq = H.insert (newDist,nbr) (queue ss)
 
 replicate2 :: Int -> Int -> a -> [[a]]
 replicate2 n m v = replicate n (replicate m v)
@@ -130,6 +142,7 @@ part1 ds m =
     (Map _ sp _) = m
 
 
+getHeightPoints :: [[Int]] -> Int -> [Coord]
 getHeightPoints hs h =
   [(i,j) | i<-[0..rows-1], j<-[0..cols-1], hs!!!(i,j) == h]
   where
@@ -138,7 +151,7 @@ getHeightPoints hs h =
 
 revDistMap :: Map -> [[Int]]
 revDistMap m@(Map hs sp ep) =
-  dijkstra (DjkState accfun sp curr0 dist0 unvis0 m uvq0)
+  dijkstra curr0 (DjkState accfun sp dist0 unvis0 m uvq0)
   where
     accfun s d = accessibleFrom m d s
     curr0 = ep
