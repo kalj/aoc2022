@@ -18,7 +18,7 @@ getArgContents = do
 
 -- problem specific stuff
 
-parseLine l = 
+parseLine l =
   case matchRegex (mkRegex "Sensor at x=(.*), y=(.*): .* is at x=(.*), y=(.*)") l of
     Just m -> ((sx, sy), dist)
       where
@@ -35,10 +35,10 @@ sensorCoverage y ((sx,sy),d) =
       dx = d-dy
   in if dx < 0 then Nothing
      else Just (sx-dx,sx+dx)
-  
+
 sumCoverage :: [(Int,Int)] -> (Int,Int) -> [(Int,Int)]
 sumCoverage [] c  = [c]
-sumCoverage cl@(cc:ccs) c = 
+sumCoverage cl@(cc:ccs) c =
   let cb = fst c
       ce = snd c
       ccb = fst cc
@@ -51,7 +51,7 @@ sumCoverage cl@(cc:ccs) c =
        else        -- overlap with ead exists merge with first, possibly also with rest
          sumCoverage ccs (min cb ccb, max ce cce)
 
-coverageSize :: [(Int,Int)] -> Int  
+coverageSize :: [(Int,Int)] -> Int
 coverageSize = sum . map (\(b,e)->e-b)
 
 part1 :: String -> Int
@@ -62,30 +62,34 @@ part1 contents =
     isSample = fst (fst (head sensorData)) == 2
     y = if isSample then 10 else 2000000
 
--- constrain (l,u) (b,e) = 
+-- constrain (l,u) (b,e) =
 --   if newE>newB then Just (newB,newE) else Nothing
---   where 
+--   where
 --     newB = max l b
---     newE = min u e  
+--     newE = min u e
 
--- invert cov l u = 
+-- invert cov l u =
 --   mapMaybe (constrain (l,u)) cov
 
 
 -- getAdmissible cov bound =
 
 --   mapMaybe (constrain bound) cov
-enumeratePoints :: [(Int,Int)] -> [Int]
-enumeratePoints [] = []
-enumeratePoints ((b,e):r) = [b..e]++enumeratePoints r
-
-subtractCov :: (Int,Int) -> [(Int,Int)] -> [(Int,Int)]
-subtractCov (l,u) cov = []
+enumeratePoints :: (Int,Int) -> [(Int,Int)] -> [Int]
+enumeratePoints (l,u) cov =
+  concatMap toInt (fstInt:internalIntervals++[lstInt])
+  where
+    toInt (b,e) = [max b l..min e u]
+    internalIntervals = zipWith (\(_,lu) (rl,_) -> (lu+1,rl-1)) cov (tail cov)
+    fstInt = (l, fst (head cov) - 1 )
+    lstInt = (snd (last cov)+1, u)
 
 -- part2 :: String -> Int
-part2 contents = 
-  concat [[(x,y) | x<-(enumeratePoints $ subtractCov (lowerBound,upperBound) (getCoverage y))]| y<-[lowerBound..upperBound]]
+part2 contents =
+  (fst tehPoint)*4000000 + (snd tehPoint)
   where
+    tehPoint = head possiblePoints
+    possiblePoints = concat [[(x,y) | x<-enumeratePoints (lowerBound,upperBound) (getCoverage y)]| y<-[lowerBound..upperBound]]
     (lowerBound,upperBound) = if isSample then (0,20) else (0,4000000)
     getCoverage y = foldl sumCoverage [] $ mapMaybe (sensorCoverage y) sensorData
     sensorData = map parseLine $ lines contents
@@ -97,4 +101,4 @@ main = do
   let part1answer = part1 contents
   putStrLn $ "Part1 answer:\n" ++ show part1answer
   let part2answer = part2 contents
-  putStrLn $ "Part2 answer:\n" ++ (unlines $ map show part2answer)
+  putStrLn $ "Part2 answer:\n" ++ show part2answer
