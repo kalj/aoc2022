@@ -3,6 +3,7 @@ name:                day18
 dependencies:
 - base >= 4.7 && < 5
 - split
+- containers
 
 ghc-options:
 - -Wall
