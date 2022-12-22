@@ -5,6 +5,7 @@ import Control.Monad
 import Debug.Trace
 import Data.List.Split
 import Data.Maybe
+import Text.Read
 import qualified Data.Map as Map
 
 -- generic
@@ -35,44 +36,81 @@ doOp Sub v1 v2 = v1-v2
 doOp Mult v1 v2 = v1*v2
 doOp Div v1 v2 = v1 `div` v2
 
-data Expression = Value Int | BinOp Operation String String
+invOp :: Operation -> Operation
+invOp Add = Sub
+invOp Sub = Add
+invOp Mult = Div
+invOp Div = Mult
+
+data Expression = Value Int | BinOp Operation Expression Expression | Var String
   deriving(Show)
 
-parseExpression :: [String] -> Expression
-parseExpression [valStr] = Value (read valStr)
-parseExpression [var1,opStr,var2] = BinOp (parseOp opStr) var1 var2
-parseExpression _ = error "Empty expression"
+type ExprMap =  Map.Map String [String]
+
+parseExpression :: ExprMap -> [String] -> Expression
+parseExpression _ [str] = case readMaybe str of
+                            Just val -> Value val
+                            Nothing -> Var str
+parseExpression expMap [var1,opStr,var2] = BinOp (parseOp opStr) expr1 expr2
+  where expr1 = parseExpression expMap (expMap `at` var1)
+        expr2 = parseExpression expMap (expMap `at` var2)
+parseExpression _ _ = error "Empty expression"
 
 parseLine l =
   let [name, exprStr] = splitOn ": " l
-  in (name, parseExpression (words exprStr))
+  in (name, words exprStr)
 
-type ExprMap =  Map.Map String Expression
+simplify :: Expression -> Expression
+simplify (BinOp op e1 e2) =
+  let s1 = simplify e1
+      s2 = simplify e2
+  in case (s1,s2) of
+       (Value v1,Value v2) -> Value (doOp op v1 v2)
+       _ -> BinOp op s1 s2
+simplify e@(Var _) = e
+simplify e = e
 
-evalExpr :: Expression -> ExprMap -> Int
-evalExpr (Value v) _= v
-evalExpr (BinOp op var1 var2) exprMap =
-  let exp1 = exprMap `at` var1
-      exp2 = exprMap `at` var2
-      val1 = evalExpr exp1 exprMap
-      val2 = evalExpr exp2 exprMap
-  in doOp op val1 val2
-
-at :: ExprMap -> String -> Expression
+at :: ExprMap -> String -> [String]
 at exprMap name = fromJust $ Map.lookup name exprMap
 
-evalName :: String -> ExprMap -> Int
-evalName name exprMap =
-  evalExpr (exprMap `at` name) exprMap
 
--- part1 :: String -> Int
+part1 :: String -> Int
 part1 contents =
-  evalName "root" exprMap
+  val
   where
+    (Value val) = simplify rootExpr
+    rootExpr = parseExpression exprMap (exprMap `at` "root")
     exprMap = Map.fromList $ map parseLine $ lines contents
 
+reroot :: Expression -> String -> Expression -> Expression
+reroot (Var name) tgtVar rootTree = if name == tgtVar then rootTree else error "Invalid variable"
+reroot (BinOp Add e1 e2@(Value _)) tgtVar rootTree = reroot e1 tgtVar (BinOp Sub rootTree e2)
+reroot (BinOp Add e1@(Value _) e2) tgtVar rootTree = reroot e2 tgtVar (BinOp Sub rootTree e1)
+reroot (BinOp Sub e1 e2@(Value _)) tgtVar rootTree = reroot e1 tgtVar (BinOp Add rootTree e2)
+reroot (BinOp Sub e1@(Value _) e2) tgtVar rootTree = reroot e2 tgtVar (BinOp Sub e1 rootTree)
+reroot (BinOp Mult e1 e2@(Value _)) tgtVar rootTree = reroot e1 tgtVar (BinOp Div rootTree e2)
+reroot (BinOp Mult e1@(Value _) e2) tgtVar rootTree = reroot e2 tgtVar (BinOp Div rootTree e1)
+reroot (BinOp Div e1 e2@(Value _)) tgtVar rootTree = reroot e1 tgtVar (BinOp Mult rootTree e2)
+reroot (BinOp Div e1@(Value _) e2) tgtVar rootTree = reroot e2 tgtVar (BinOp Div e1 rootTree)
+reroot _ _ _ = error "Invalid expression"
+
+
 part2 :: String -> Int
-part2 contents = length contents
+part2 contents =
+  val
+  where
+    (Value val) = simplify newTree
+    newTree = reroot h00manTree "h00man" valTree
+    (h00manTree, valTree) = case (simplify leftTree, simplify rightTree) of
+                              (v@(Value _), ht) -> (ht,v)
+                              (ht,v@(Value _)) -> (ht,v)
+                              _ -> error "Bad stuff"
+
+    leftTree = parseExpression exprMap (exprMap `at` leftTreeName)
+    rightTree = parseExpression exprMap (exprMap `at` rightTreeName)
+    [leftTreeName,_,rightTreeName] = exprMapRaw `at` "root"
+    exprMap = Map.insert "humn" ["h00man"] exprMapRaw
+    exprMapRaw = Map.fromList $ map parseLine $ lines contents
 
 main :: IO ()
 main = do
