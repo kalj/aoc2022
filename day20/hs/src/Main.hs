@@ -68,8 +68,18 @@ part1 contents =
     lst :: [Int]
     lst = map read $ lines contents
 
+doPart2Mixing lst =
+  let indices = [0..(length lst)-1]
+      pairs = zipWith (\i v->(i,811589153*v)) indices lst
+      finalList = (!!10) $ iterate (\p-> foldl moveInd p indices) pairs
+  in map snd finalList
+
 part2 :: String -> Int
-part2 contents = length contents
+part2 contents =
+  grooveCoord $ doPart2Mixing lst
+  where
+    lst :: [Int]
+    lst = map read $ lines contents
 
 main :: IO ()
 main = do
