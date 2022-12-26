@@ -90,7 +90,7 @@ orderStates s1 s2 = (geodeCount $ resourceCount s1) `compare` (geodeCount $ reso
 --     options = (res,robs):[(res `vSub` cost, incDim robs i) | (cost,i) <-zip bp [0..], affords res cost]
 --     procOpt (rs,rb) = stepTime bp (t-1) state { robotCount = rb, resourceCount = rs `vAdd` robs }
 
-stupid :: Blueprint -> Int -> ProdState -> Int
+stepwiseStupid :: Blueprint -> Int -> ProdState -> Int
 -- sample:
 -- 17 -- 1.6 s
 -- 18 -- 4.9 s
@@ -99,15 +99,15 @@ stupid :: Blueprint -> Int -> ProdState -> Int
 -- input:
 -- 18 -- 13.1s
 -- 20 -- 2m18s
-stupid _ 0 state = geodeCount $ resourceCount state
-stupid bp t state =
+stepwiseStupid _ 0 state = geodeCount $ resourceCount state
+stepwiseStupid bp t state =
   maximum $ map procOpt options
   where
     res = resourceCount state
     robs = robotCount state
 
     options = (res,robs):[(res `vSub` cost, incDim robs i) | (cost,i) <-zip bp [0..], affords res cost]
-    procOpt (rs,rb) = stupid bp (t-1) state { robotCount = rb, resourceCount = rs `vAdd` robs }
+    procOpt (rs,rb) = stepwiseStupid bp (t-1) state { robotCount = rb, resourceCount = rs `vAdd` robs }
 
 timeLeft :: Vec4 -> Vec4 -> Maybe Int
 timeLeft v1 v2 = timeLeft' (lstFromVec4 v1) (lstFromVec4 v2)
@@ -123,7 +123,12 @@ timeLeft' (c:cs) (r:rs)
                   Just mx -> Just (max mx tl)
                     where  tl = 1 + ((c-1) `div` r) -- integer div with round up
 
-smart :: Blueprint -> Int -> ProdState -> Int
+
+timeToPurchase (res,robs) cost =
+  let missingFunds = vMap (max 0) $ cost `vSub` res
+  in timeLeft missingFunds robs
+
+optionWise :: Blueprint -> Int -> ProdState -> Int
 -- sample:
 -- 18 -- 0.7 s
 -- 19 -- 1.1 s
@@ -140,7 +145,7 @@ smart :: Blueprint -> Int -> ProdState -> Int
 -- 22 -- 26.0s
 -- 23 -- 1m23s
 -- 24 -- 5m12s
-smart bp t state =
+optionWise bp t state =
   if null options then
     geodeCount $ res `vAdd` (t `vScale` robs)
   else
@@ -151,26 +156,20 @@ smart bp t state =
 
     options = mapMaybe getOption $ zip bp [0..]
     getOption :: (Vec4,Int) -> Maybe (Int,Int)
-    getOption (cost,i) =
-      let missingFunds = vMap (max 0) $ cost `vSub` res
-      in timeLeft missingFunds robs >>= \tl -> if tl<t then Just (tl,i) else Nothing
+    getOption (cost,i) = timeToPurchase (res,robs) cost >>= \tl -> if tl<t then Just (tl,i) else Nothing
 
-    procOpt (tl,i) = smart bp (t-tl-1) state { robotCount = incDim robs i, resourceCount = (res `vAdd` ((1+tl) `vScale` robs)) `vSub` (bp!!i) }
+    procOpt (tl,i) = optionWise bp (t-tl-1) state { robotCount = incDim robs i, resourceCount = (res `vAdd` ((1+tl) `vScale` robs)) `vSub` (bp!!i) }
 
 
-computeMaxGeodes tLen bp =
-  smart bp tLen ProdState { resourceCount = (0,0,0,0)
-                          , robotCount = (1,0,0,0)
-                          }
 
-smartBounded :: [Vec4] -> Vec4 -> Int -> ProdState -> Int
+optionWiseBounded :: [Vec4] -> Vec4 -> Int -> ProdState -> Int
 -- sample:
--- 21 -- 4.7s
--- 22 -- 17.6s
--- 23 -- 1m1s
--- 24 -- 3m47s
--- 25 -- 14m49s
-smartBounded bp maxRobs t state =
+-- 23 -- 0.3s
+-- 24 -- 1.0s
+-- 25 -- 2.5s
+-- 26 -- 6.8s
+-- 27 -- 20.8s
+optionWiseBounded bp maxRobs t state =
   if null options then
     geodeCount $ res `vAdd` (t `vScale` robs)
   else
@@ -183,18 +182,19 @@ smartBounded bp maxRobs t state =
 
     options = mapMaybe getOption $ filter robotBound $ zip bp [0..]
     getOption :: (Vec4,Int) -> Maybe (Int,Int)
-    getOption (cost,i) =
-      let missingFunds = vMap (max 0) $ cost `vSub` res
-      in timeLeft missingFunds robs >>= \tl -> if tl<t then Just (tl,i) else Nothing
+    getOption (cost,i) = timeToPurchase (res,robs) cost >>= \tl -> if tl<t then Just (tl,i) else Nothing
 
     mkState tl i = state { robotCount = incDim robs i, resourceCount = (res `vAdd` ((1+tl) `vScale` robs)) `vSub` (bp!!i) }
-    procOpt (tl,i) = smartBounded bp maxRobs (t-tl-1) $ mkState tl i
+    procOpt (tl,i) = optionWiseBounded bp maxRobs (t-tl-1) $ mkState tl i
 
-computeMaxGeodes2 tLen bp =
-  smartBounded bp maxRobs tLen ProdState { resourceCount = (0,0,0,0)
-                                         , robotCount = (1,0,0,0)
-                                         }
-  where maxRobs = foldl1 (vZipW max) bp
+
+computeMaxGeodes tLen bp =
+  let foo = optionWise
+      -- foo = optionWiseBounded
+  in foo bp tLen ProdState { resourceCount = (0,0,0,0)
+                           , robotCount = (1,0,0,0)
+                           }
+
 
 -- part1 :: String -> Int
 part1 contents =
@@ -207,7 +207,7 @@ part1 contents =
 -- part2 :: String -> Int
 part2 contents =
   let bps = map parseLine $ lines contents
-      maxG = map (computeMaxGeodes 25) $ take 3 bps
+      maxG = map (computeMaxGeodes 32) $ take 3 bps
       gProd = product maxG
   in (maxG, gProd)
 
