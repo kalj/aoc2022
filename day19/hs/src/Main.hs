@@ -58,6 +58,12 @@ incDim (x1,x2,x3,x4) 1 = (x1,x2+1,x3,x4)
 incDim (x1,x2,x3,x4) 2 = (x1,x2,x3+1,x4)
 incDim (x1,x2,x3,x4) _ = (x1,x2,x3,x4+1)
 
+vGet :: Int -> Vec4 -> Int
+vGet 0 (x,_,_,_) = x
+vGet 1 (_,x,_,_) = x
+vGet 2 (_,_,x,_) = x
+vGet 3 (_,_,_,x) = x
+
 affords :: Vec4 -> Vec4 -> Bool
 affords (r1,r2,r3,r4) (c1,c2,c3,c4) = c1<=r1 && c2<=r2 && c3<=r3 && c4<=r4
 
@@ -67,7 +73,7 @@ data ProdState = ProdState { resourceCount :: Vec4
   deriving(Show)
 
 geodeCount :: Vec4 -> Int
-geodeCount (_,_,_,g1) = g1
+geodeCount = vGet 3
 
 orderStates :: ProdState -> ProdState -> Ordering
 orderStates s1 s2 = (geodeCount $ resourceCount s1) `compare` (geodeCount $ resourceCount s2)
@@ -151,10 +157,44 @@ smart bp t state =
 
     procOpt (tl,i) = smart bp (t-tl-1) state { robotCount = incDim robs i, resourceCount = (res `vAdd` ((1+tl) `vScale` robs)) `vSub` (bp!!i) }
 
+
 computeMaxGeodes tLen bp =
   smart bp tLen ProdState { resourceCount = (0,0,0,0)
                           , robotCount = (1,0,0,0)
                           }
+
+smartBounded :: [Vec4] -> Vec4 -> Int -> ProdState -> Int
+-- sample:
+-- 21 -- 4.7s
+-- 22 -- 17.6s
+-- 23 -- 1m1s
+-- 24 -- 3m47s
+-- 25 -- 14m49s
+smartBounded bp maxRobs t state =
+  if null options then
+    geodeCount $ res `vAdd` (t `vScale` robs)
+  else
+    maximum $ map procOpt options
+  where
+    res = resourceCount state
+    robs = robotCount state
+
+    robotBound (_,i) = not (i/=3 && vGet i maxRobs == vGet i robs)
+
+    options = mapMaybe getOption $ filter robotBound $ zip bp [0..]
+    getOption :: (Vec4,Int) -> Maybe (Int,Int)
+    getOption (cost,i) =
+      let missingFunds = vMap (max 0) $ cost `vSub` res
+      in timeLeft missingFunds robs >>= \tl -> if tl<t then Just (tl,i) else Nothing
+
+    mkState tl i = state { robotCount = incDim robs i, resourceCount = (res `vAdd` ((1+tl) `vScale` robs)) `vSub` (bp!!i) }
+    procOpt (tl,i) = smartBounded bp maxRobs (t-tl-1) $ mkState tl i
+
+computeMaxGeodes2 tLen bp =
+  smartBounded bp maxRobs tLen ProdState { resourceCount = (0,0,0,0)
+                                         , robotCount = (1,0,0,0)
+                                         }
+  where maxRobs = foldl1 (vZipW max) bp
 
 -- part1 :: String -> Int
 part1 contents =
@@ -166,7 +206,10 @@ part1 contents =
 
 -- part2 :: String -> Int
 part2 contents =
-  length contents
+  let bps = map parseLine $ lines contents
+      maxG = map (computeMaxGeodes 25) $ take 3 bps
+      gProd = product maxG
+  in (maxG, gProd)
 
 main :: IO ()
 main = do
