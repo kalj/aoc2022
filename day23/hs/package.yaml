@@ -3,6 +3,7 @@ name:                day23
 dependencies:
 - base >= 4.7 && < 5
 - split
+- array
 
 ghc-options:
 - -Wall
